@@ -24,6 +24,13 @@ class BBox:
         return (self.min_lon <= lon <= self.max_lon
                 and self.min_lat <= lat <= self.max_lat)
 
+    def inset(self, margin: float) -> "BBox":
+        """Shrink the box by ``margin`` degrees on every side. Behaviour at the
+        very edge of the AOI is dominated by vessels crossing the boundary, so
+        detection runs on the inner box only."""
+        return BBox(self.min_lon + margin, self.min_lat + margin,
+                    self.max_lon - margin, self.max_lat - margin)
+
 
 @dataclass(frozen=True)
 class Config:

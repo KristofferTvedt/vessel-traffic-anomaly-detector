@@ -43,3 +43,17 @@ MS_PER_KNOT = 0.514444
 
 def knots_to_ms(knots: float) -> float:
     return knots * MS_PER_KNOT
+
+
+# AIS "not available" sentinels: SOG 102.2+ kn (raw 1023), COG 360 (raw 3600),
+# true heading 511. These are absence markers, not real values; drop them.
+def valid_sog(v):
+    return None if v is None or v >= 102.2 else v
+
+
+def valid_cog(v):
+    return None if v is None or v >= 360.0 else v
+
+
+def valid_heading(v):
+    return None if v is None or v >= 511 else v

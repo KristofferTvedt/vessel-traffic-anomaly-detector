@@ -20,6 +20,7 @@ from pathlib import Path
 
 from . import db
 from .config import Config
+from .geo import valid_cog, valid_heading, valid_sog
 
 # canonical field -> accepted source-column names (lowercased)
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
@@ -31,6 +32,7 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "sog": ("sog", "speedoverground", "speed_over_ground", "speed"),
     "cog": ("cog", "courseoverground", "course_over_ground", "course"),
     "heading": ("true_heading", "trueheading", "heading"),
+    "nav_status": ("status", "nav_status", "navigationalstatus"),
     "name": ("name", "shipname", "ship_name"),
     "ship_type": ("ship_type", "shiptype", "type"),
 }
@@ -89,15 +91,17 @@ def _store(conn, cols: dict, get, *, scale_minutes: bool) -> bool:
         lon /= 600_000.0
     name = (str(get(cols["name"])).strip() or None) if "name" in cols else None
     st = _num(get(cols["ship_type"])) if "ship_type" in cols else None
+    nav = _num(get(cols["nav_status"])) if "nav_status" in cols else None
     db.upsert_position(conn, {
         "mmsi": int(float(mmsi)),
         "name": name,
         "ship_type": int(st) if st is not None else None,
         "lat": lat,
         "lon": lon,
-        "sog": _num(get(cols["sog"])) if "sog" in cols else None,
-        "cog": _num(get(cols["cog"])) if "cog" in cols else None,
-        "heading": _num(get(cols["heading"])) if "heading" in cols else None,
+        "sog": valid_sog(_num(get(cols["sog"]))) if "sog" in cols else None,
+        "cog": valid_cog(_num(get(cols["cog"]))) if "cog" in cols else None,
+        "heading": valid_heading(_num(get(cols["heading"]))) if "heading" in cols else None,
+        "nav_status": int(nav) if nav is not None else None,
         "msgtime": msgtime,
         "fetched_at": msgtime,
         "source": "kystverket",

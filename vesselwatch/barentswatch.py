@@ -13,6 +13,7 @@ from __future__ import annotations
 import time
 
 from .config import BBox, Config
+from .geo import valid_cog, valid_heading, valid_sog
 from .http import get_json, post_form
 
 TOKEN_URL = "https://id.barentswatch.no/connect/token"
@@ -67,9 +68,9 @@ def _clean(raw: dict) -> dict | None:
         "ship_type": raw.get("shipType"),
         "lat": float(lat),
         "lon": float(lon),
-        "sog": raw.get("speedOverGround"),   # knots
-        "cog": raw.get("courseOverGround"),  # degrees
-        "heading": raw.get("trueHeading"),   # degrees, 511 = not available
+        "sog": valid_sog(raw.get("speedOverGround")),   # knots
+        "cog": valid_cog(raw.get("courseOverGround")),  # degrees
+        "heading": valid_heading(raw.get("trueHeading")),  # degrees
         "msgtime": raw.get("msgtime"),       # ISO UTC
     }
 

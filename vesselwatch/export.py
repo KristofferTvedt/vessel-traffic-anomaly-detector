@@ -30,6 +30,8 @@ from .collector import now_utc_iso
 from .config import Config
 
 TRACK_WINDOW_MIN = 90.0   # minutes of track either side of the flag to include
+TRACK_MAX_POINTS = 120    # downsample: full-resolution AIS is far denser than a
+                          # map polyline needs, and it bloats the payload
 
 
 def _track_around(conn, mmsi: int, at_time: str) -> list[list[float]]:
@@ -38,6 +40,9 @@ def _track_around(conn, mmsi: int, at_time: str) -> list[list[float]]:
     for r in db.track(conn, mmsi):
         if abs((_parse(r["msgtime"]) - center).total_seconds()) / 60.0 <= TRACK_WINDOW_MIN:
             pts.append([round(r["lat"], 5), round(r["lon"], 5)])
+    if len(pts) > TRACK_MAX_POINTS:
+        stride = len(pts) // TRACK_MAX_POINTS + 1
+        pts = pts[::stride] + [pts[-1]]  # keep the last point so the line ends true
     return pts
 
 
@@ -47,9 +52,13 @@ def select(conn, per_kind: int) -> list[dict]:
     chosen = []
     for kind in kinds:
         rows = conn.execute(
-            "SELECT * FROM anomalies WHERE kind = ? ORDER BY score DESC LIMIT ?",
-            (kind, per_kind),
+            "SELECT * FROM anomalies WHERE kind = ? ORDER BY score DESC",
+            (kind,),
         ).fetchall()
+        # One incident per vessel per kind: a single faulty transponder shouldn't
+        # fill the gallery with copies of itself.
+        seen: set[int] = set()
+        rows = [a for a in rows if not (a["mmsi"] in seen or seen.add(a["mmsi"]))][:per_kind]
         for a in rows:
             pos = conn.execute(
                 "SELECT name, ship_type FROM positions WHERE mmsi = ? "

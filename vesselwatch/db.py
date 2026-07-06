@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS positions (
     sog         REAL,                       -- speed over ground, knots
     cog         REAL,                       -- course over ground, degrees
     heading     REAL,                       -- true heading, degrees (511 = n/a)
+    nav_status  INTEGER,                    -- AIS nav status (1 anchor, 5 moored, ...)
     msgtime     TEXT    NOT NULL,           -- ISO UTC, from the AIS message
     fetched_at  TEXT    NOT NULL,           -- ISO UTC, when we polled
     source      TEXT    NOT NULL,           -- 'barentswatch' | 'kystverket'
@@ -65,15 +66,17 @@ def upsert_position(conn: sqlite3.Connection, row: dict) -> None:
     conn.execute(
         """
         INSERT INTO positions (mmsi, name, ship_type, lat, lon, sog, cog,
-            heading, msgtime, fetched_at, source)
+            heading, nav_status, msgtime, fetched_at, source)
         VALUES (:mmsi, :name, :ship_type, :lat, :lon, :sog, :cog,
-            :heading, :msgtime, :fetched_at, :source)
+            :heading, :nav_status, :msgtime, :fetched_at, :source)
         ON CONFLICT(mmsi, msgtime) DO UPDATE SET
             name=coalesce(excluded.name, positions.name),
             ship_type=coalesce(excluded.ship_type, positions.ship_type),
-            sog=excluded.sog, cog=excluded.cog, heading=excluded.heading
+            sog=excluded.sog, cog=excluded.cog, heading=excluded.heading,
+            nav_status=excluded.nav_status
         """,
-        {**{k: None for k in ("name", "ship_type", "sog", "cog", "heading")}, **row},
+        {**{k: None for k in ("name", "ship_type", "sog", "cog", "heading",
+                              "nav_status")}, **row},
     )
 
 

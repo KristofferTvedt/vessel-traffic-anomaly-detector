@@ -18,14 +18,35 @@ from .collector import now_utc_iso
 from .config import Config
 
 
+STOP_ZONE_MIN_VESSELS = 5   # a cell where this many distinct vessels stop is a
+                            # de-facto berth/anchorage, not an anomaly
+
+
+def learn_stop_zones(conn) -> frozenset:
+    """Grid cells where many different vessels sit still: terminals, anchorages,
+    pilot-boarding areas. Learned from the data so we don't hard-code berths."""
+    rows = conn.execute(
+        "SELECT lat, lon, mmsi FROM positions WHERE sog <= ?",
+        (anomaly.STOP_KNOTS,),
+    ).fetchall()
+    by_cell: dict[tuple, set] = {}
+    for r in rows:
+        by_cell.setdefault(anomaly.cell(r["lat"], r["lon"]), set()).add(r["mmsi"])
+    return frozenset(c for c, ships in by_cell.items()
+                     if len(ships) >= STOP_ZONE_MIN_VESSELS)
+
+
 def run(cfg: Config) -> Counter:
     conn = db.connect(cfg.db_path)
     tally: Counter = Counter()
     try:
         detected = now_utc_iso()
+        conn.execute("DELETE FROM anomalies")  # full recompute each run
+        stop_zones = learn_stop_zones(conn)
+        inner = cfg.aoi.inset(0.005)  # ~500 m in: drops literal box-edge crossings
         for mmsi in db.mmsis(conn):
             fixes = [dict(r) for r in db.track(conn, mmsi)]
-            for a in anomaly.detect_track(fixes):
+            for a in anomaly.detect_track(fixes, stop_zones, inner):
                 db.upsert_anomaly(conn, {
                     "mmsi": a.mmsi, "kind": a.kind, "at_time": a.at_time,
                     "lat": a.lat, "lon": a.lon, "score": a.score,

@@ -74,6 +74,43 @@ all four planted anomalies and raises nothing on the clean transits, so the code
 path is known-good before a single real position arrives. The forest correctly
 refuses to run on the thin synthetic set (needs >=200 transitions).
 
+## Tuning against real AIS (the actual work)
+
+Pulled two days of Kystverket HAIS over the Bergen approaches: 1.28M position
+reports at full time resolution (a fix every ~9 s). The naive rules that passed
+the synthetic test produced **4072 flags, 3236 of them speed_jumps**. Working
+through why each was wrong is the substance of this project.
+
+- **GPS jitter reads as teleporting.** At full resolution a moored vessel's
+  position wanders a few metres between fixes seconds apart; distance/time then
+  implies 60+ kn. The details gave it away: "65 kn implied over 0 min (0.0 nm)".
+  Fix: a jump must clear a real distance (500 m), not just an impossible speed.
+  3236 -> ~10.
+- **The AIS "not available" sentinel.** Several stops and jumps came from a SOG
+  of 102.3 kn. That's the raw-1023 "speed unavailable" marker leaking through as
+  a real number. Clamped SOG >= 102.2, COG >= 360 and heading 511 to null at
+  ingestion. Domain knowledge the data assumes you have.
+- **One terminal dominated the stops.** 330 of ~380 sudden_stops sat in a single
+  grid cell, a ferry berth, all still reporting status "underway". Hard-coding
+  berths is whack-a-mole, so instead I **learn stop zones from the data**: any
+  cell where >= 5 distinct vessels sit still is a de-facto berth/anchorage and is
+  excluded. Added nav-status exclusion too, and a persistence check: a real
+  dead-in-water stop stays stopped, a quay call resumes within minutes.
+- **Full resolution retriggers one event many times.** A single behaviour fires
+  across dozens of consecutive fixes. Added event de-bouncing: same-kind flags
+  for a vessel within 30 min collapse to one incident (strongest kept).
+- **The AOI boundary makes noise.** Gaps and course-changes piled up at the box
+  edges, vessels leaving our small area, not going dark or turning oddly. Run
+  detection on the box inset ~500 m so literal edge-crossings don't count.
+- **Near-180 "deviations" are reversals, not lane departures.** Capped the
+  course-change flag below 135 deg.
+
+End result: **4072 -> ~37** defensible flags over the window, curated to a handful
+per kind for the demo. Honest caveat carried forward: genuine interior AIS gaps
+are rare here (coverage is good and the window was calm), so most silence sits at
+the coverage edge and is correctly filtered out; the live collector will surface
+real ones over time.
+
 ## Host
 
 Runs on my laptop (kept on, never sleeps, stays logged in for remote desktop).
