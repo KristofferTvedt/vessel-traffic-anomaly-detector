@@ -78,11 +78,39 @@ def select(conn, per_kind: int) -> list[dict]:
     return chosen
 
 
+def resolve_names(cfg: Config, incidents: list[dict]) -> int:
+    """Fill in vessel names from BarentsWatch for incidents that have none.
+
+    Kystverket's historical feed carries MMSI but not vessel names; the live AIS
+    feed does. Most coastal vessels transmit continuously, so a current snapshot
+    resolves the MMSIs in the gallery. Best-effort: no creds or no match just
+    leaves the MMSI showing.
+    """
+    if not (cfg.bw_client_id and cfg.bw_client_secret):
+        return 0
+    from . import barentswatch
+    try:
+        feed = barentswatch.from_config(cfg).latest_positions()
+    except Exception as exc:  # names are a nice-to-have, never fail the export
+        print(f"WARN name lookup skipped: {exc}")
+        return 0
+    by_mmsi = {int(r["mmsi"]): (r.get("name") or "").strip()
+               for r in feed if isinstance(r, dict) and r.get("mmsi") is not None}
+    filled = 0
+    for inc in incidents:
+        if not inc.get("name") and by_mmsi.get(inc["mmsi"]):
+            inc["name"] = by_mmsi[inc["mmsi"]]
+            filled += 1
+    return filled
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="incidents.json")
     ap.add_argument("--per-kind", type=int, default=1,
                     help="how many examples of each anomaly kind to include")
+    ap.add_argument("--names", action="store_true",
+                    help="resolve vessel names from the live BarentsWatch feed")
     args = ap.parse_args()
 
     cfg = Config.load()
@@ -91,6 +119,10 @@ def main() -> int:
         incidents = select(conn, args.per_kind)
     finally:
         conn.close()
+
+    if args.names:
+        n = resolve_names(cfg, incidents)
+        print(f"resolved {n} vessel name(s) from the live feed")
 
     payload = {
         "generated": now_utc_iso(),

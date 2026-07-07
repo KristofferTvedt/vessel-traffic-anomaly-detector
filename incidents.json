@@ -1,5 +1,5 @@
 {
-  "generated": "2026-07-07T09:59:17+00:00",
+  "generated": "2026-07-07T10:27:41+00:00",
   "aoi": {
     "name": "Bergen-approaches",
     "bbox": [
@@ -12,7 +12,7 @@
   "incidents": [
     {
       "mmsi": 257191200,
-      "name": null,
+      "name": "FALKEN",
       "shipType": null,
       "kind": "ais_gap",
       "at": "2025-11-15T13:21:08.000Z",
@@ -443,7 +443,7 @@
     },
     {
       "mmsi": 257609800,
-      "name": null,
+      "name": "FOX TORRES",
       "shipType": null,
       "kind": "route_deviation",
       "at": "2025-11-15T11:04:37.000Z",
@@ -866,7 +866,7 @@
     },
     {
       "mmsi": 257191200,
-      "name": null,
+      "name": "FALKEN",
       "shipType": null,
       "kind": "route_deviation",
       "at": "2025-11-16T13:16:58.000Z",
@@ -1149,7 +1149,7 @@
     },
     {
       "mmsi": 257609000,
-      "name": null,
+      "name": "LIBAS",
       "shipType": null,
       "kind": "speed_jump",
       "at": "2025-11-16T12:32:01.000Z",
@@ -1612,7 +1612,7 @@
     },
     {
       "mmsi": 259048800,
-      "name": null,
+      "name": "EMBLA",
       "shipType": null,
       "kind": "speed_jump",
       "at": "2025-11-15T15:05:52.000Z",
@@ -2075,7 +2075,7 @@
     },
     {
       "mmsi": 257777600,
-      "name": null,
+      "name": "ROV1303",
       "shipType": null,
       "kind": "sudden_stop",
       "at": "2025-11-16T15:10:30.000Z",
