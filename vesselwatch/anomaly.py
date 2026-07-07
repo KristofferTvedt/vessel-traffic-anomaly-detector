@@ -50,6 +50,14 @@ BERTH_RADIUS_M = 800.0      # don't flag stops within this of a known berth
 CELL = 0.01                 # ~0.5-1 km grid used to learn busy stop zones
 STOP_STAY_MIN = 8.0         # a real dead-in-water stop stays stopped this long;
                             # a slow-and-go at a quay resumes sooner
+STOP_APPROACH_MIN = 10.0    # a real stop is preceded by the vessel actually
+STOP_APPROACH_M = 500.0     # covering ground; a moored object with a bad SOG
+                            # spike hasn't moved at all
+VISIT_GAP_MIN = 20.0        # still-fixes separated by more than this are separate
+                            # visits to a place
+HABITUAL_VISITS = 2         # a place a vessel stops at this many separate times is
+                            # its own berth / route endpoint (e.g. a ferry quay),
+                            # not an anomaly
 DEDUPE_GAP_MIN = 30.0       # same-kind flags for one vessel closer than this are
                             # one event (full time resolution retriggers a lot)
 
@@ -104,6 +112,39 @@ def _stays_stopped(usable: list[dict], stop_idx: int, stop_time: datetime) -> bo
     return True
 
 
+def _travelled_before(usable: list[dict], stop_idx: int, stop_time: datetime) -> float:
+    """How far the vessel was from its stop position STOP_APPROACH_MIN earlier.
+    Near zero means it never moved (a moored object with a bad SOG spike), not a
+    vessel that was underway and then stopped."""
+    stop = usable[stop_idx]
+    ref = None
+    for k in range(stop_idx - 1, -1, -1):
+        ref = usable[k]
+        if _minutes(_parse(usable[k]["msgtime"]), stop_time) >= STOP_APPROACH_MIN:
+            break
+    if ref is None:
+        return 0.0
+    return haversine_m(ref["lat"], ref["lon"], stop["lat"], stop["lon"])
+
+
+def _habitual_stop_cells(usable: list[dict]) -> frozenset:
+    """Grid cells this vessel stops at on more than one separate occasion: its own
+    berths and route endpoints (a ferry's quays), where stopping is routine. A
+    one-off stop somewhere it never otherwise stops is what we want to keep."""
+    visits: dict[tuple, int] = {}
+    last_seen: dict[tuple, datetime] = {}
+    for f in usable:
+        if (f.get("sog") if f.get("sog") is not None else 99) > STOP_KNOTS:
+            continue
+        cl = cell(f["lat"], f["lon"])
+        t = _parse(f["msgtime"])
+        prev = last_seen.get(cl)
+        if prev is None or _minutes(prev, t) > VISIT_GAP_MIN:
+            visits[cl] = visits.get(cl, 0) + 1
+        last_seen[cl] = t
+    return frozenset(cl for cl, v in visits.items() if v >= HABITUAL_VISITS)
+
+
 def _dedupe(anoms: list["Anomaly"]) -> list["Anomaly"]:
     """Collapse same-kind flags for one vessel that fall within DEDUPE_GAP_MIN of
     each other into a single incident, keeping the strongest. One behaviour at
@@ -144,6 +185,7 @@ def detect_track(fixes: list[dict], stop_zones: frozenset = frozenset(),
         return []
 
     mmsi = usable[0]["mmsi"]
+    habitual = _habitual_stop_cells(usable)
     out: list[Anomaly] = []
 
     for i in range(len(usable) - 1):
@@ -198,7 +240,9 @@ def detect_track(fixes: list[dict], stop_zones: frozenset = frozenset(),
                 and dt_min <= STOP_WINDOW_MIN
                 and cur.get("nav_status") not in MOORED_STATUSES
                 and cell(cur["lat"], cur["lon"]) not in stop_zones
+                and cell(cur["lat"], cur["lon"]) not in habitual
                 and not _near_berth(cur["lat"], cur["lon"])
+                and _travelled_before(usable, i + 1, t1) >= STOP_APPROACH_M
                 and _stays_stopped(usable, i + 1, t1)):
             out.append(Anomaly(
                 mmsi, "sudden_stop", cur["msgtime"], cur["lat"], cur["lon"],

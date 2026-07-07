@@ -104,6 +104,15 @@ through why each was wrong is the substance of this project.
   detection on the box inset ~500 m so literal edge-crossings don't count.
 - **Near-180 "deviations" are reversals, not lane departures.** Capped the
   course-change flag below 135 deg.
+- **Ferries and moored objects, caught by eye.** Reviewing the two surviving
+  sudden_stops, I recognised them as false positives from local knowledge: one
+  was a vessel that never moves at all (a moored object whose "27 kn" was another
+  bad SOG spike), the other a ferry dwelling at its quay. Two more guards: a real
+  stop must be preceded by the vessel actually covering ground (kills the moored
+  object), and a stop at a cell the vessel *returns to* across separate visits is
+  its own berth/route endpoint, not an anomaly (kills the ferry, without needing
+  a ferry list). Left one genuine stop: a wide-ranging work vessel that stopped
+  once away from anywhere it usually does.
 
 End result: **4072 -> ~37** defensible flags over the window, curated to a handful
 per kind for the demo. Honest caveat carried forward: genuine interior AIS gaps
